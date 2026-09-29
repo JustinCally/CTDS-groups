@@ -3,23 +3,6 @@ library(numDeriv)
 
 ## ----------  TOP ----------------------------------------
 
-#' Generate a simulated animal population
-#'
-#' Simulates animal locations within a rectangular study region, either
-#' uniformly at random or aggregated in Gaussian clusters. The number of
-#' animals is Poisson with mean \code{density * width * height}.
-#'
-#' @param width,height Numeric. Dimensions of the rectangular study region.
-#' @param density Numeric. Expected animal density (animals per unit area).
-#' @param distribution Character. Spatial distribution of animals: \code{"uniform"}
-#'   (complete spatial randomness) or \code{"clustered"} (Gaussian clusters).
-#' @param cluster_radius Numeric. Standard deviation of animal displacements
-#'   around cluster centres (clustered distribution only).
-#' @param mean_cluster_size Numeric. Rough mean number of animals per cluster;
-#'   used to set the number of cluster centres.
-#'
-#' @return A \code{data.frame} with columns \code{x}, \code{y} and a cluster
-#'   identifier (\code{cluster_id} for uniform, \code{cluster} for clustered).
 generate_animals <- function(
     width,
     height,
@@ -28,6 +11,24 @@ generate_animals <- function(
     cluster_radius = 5,
     mean_cluster_size = 10)
      {
+  #' Generate a simulated animal population
+  #'
+  #' Simulates animal locations within a rectangular study region, either
+  #' uniformly at random or aggregated in Gaussian clusters. The number of
+  #' animals is Poisson with mean \code{density * width * height}.
+  #'
+  #' @param width,height Numeric. Dimensions of the rectangular study region.
+  #' @param density Numeric. Expected animal density (animals per unit area).
+  #' @param distribution Character. Spatial distribution of animals: \code{"uniform"}
+  #'   (complete spatial randomness) or \code{"clustered"} (Gaussian clusters).
+  #' @param cluster_radius Numeric. Standard deviation of animal displacements
+  #'   around cluster centres (clustered distribution only).
+  #' @param mean_cluster_size Numeric. Rough mean number of animals per cluster;
+  #'   used to set the number of cluster centres.
+  #'
+  #' @return A \code{data.frame} with columns \code{x}, \code{y} and a cluster
+  #'   identifier (\code{cluster_id} for uniform, \code{cluster} for clustered).
+  #'
 
   distribution <- match.arg(distribution)
   area <- width * height
@@ -72,28 +73,27 @@ generate_animals <- function(
 
 
 ## ----- Model selection by AIC ----------------------------
-#' Select the best point-transect detection function by AIC
-#'
-#' Fits a set of candidate detection functions (half-normal, hazard-rate and
-#' uniform keys, each with cosine adjustments) to radial distance data using
-#' \code{\link[Distance]{ds}}, and returns the model with the lowest AIC.
-#' Models that fail to converge are dropped.
-#'
-#' @param dist_ds A \code{data.frame} of detected objects in \code{Distance}
-#'   flatfile format, containing at least a \code{distance} column (or
-#'   \code{distbegin}/\code{distend} when binned).
-#' @param w Numeric. Truncation distance (sector radius).
-#' @param binned Logical. If \code{TRUE}, distances are first binned using
-#'   \code{breaks} and fitted as binned point-transect data.
-#' @param breaks Numeric vector of bin cutpoints, required when
-#'   \code{binned = TRUE}.
-#'
-#' @return A fitted \code{ds} model object with the lowest AIC among the
-#'   candidates. Errors if all candidate models fail.
+
 select_best_ds <- function(dist_ds, w, binned = FALSE, breaks = NULL) {
-  # Fit detection functions to distance data using ds() in the Distance package
-  # cycle through candidate models and select best using AIC
-  # Candidate models: key + adjustment + formula combinations
+  #' Select the best point-transect detection function by AIC
+  #'
+  #' Fits a set of candidate detection functions (half-normal, hazard-rate and
+  #' uniform keys, each with cosine adjustments) to radial distance data using
+  #' \code{\link[Distance]{ds}}, and returns the model with the lowest AIC.
+  #' Models that fail to converge are dropped.
+  #'
+  #' @param dist_ds A \code{data.frame} of detected objects in \code{Distance}
+  #'   flatfile format, containing at least a \code{distance} column (or
+  #'   \code{distbegin}/\code{distend} when binned).
+  #' @param w Numeric. Truncation distance (sector radius).
+  #' @param binned Logical. If \code{TRUE}, distances are first binned using
+  #'   \code{breaks} and fitted as binned point-transect data.
+  #' @param breaks Numeric vector of bin cutpoints, required when
+  #'   \code{binned = TRUE}.
+  #'
+  #' @return A fitted \code{ds} model object with the lowest AIC among the
+  #'   candidates. Errors if all candidate models fail.
+  #'
   candidates <- list(
       list(key = "hn",   adjustment = "cos"),
       list(key = "hr",   adjustment = "cos"),
@@ -136,52 +136,52 @@ select_best_ds <- function(dist_ds, w, binned = FALSE, breaks = NULL) {
 
 ##---- Simulation functions -----------------------
 
-#' Simulate one camera trap distance sampling (CTDS) replicate
-#'
-#' Simulates sensor-triggered CTDS: an animal population is generated,
-#' \code{n_cam} cameras are placed at random locations (all facing south),
-#' and a camera is triggered by the closest individual with probability given
-#' by a half-normal detection function. Density is estimated by fitting a
-#' point-transect detection function with \code{\link[Distance]{ds}} (chosen
-#' by AIC) and estimating abundance with \code{\link[Distance]{dht2}}.
-#'
-#' @param D_true Numeric. True animal density (animals per unit area).
-#' @param sigma_closest Numeric. Scale of the half-normal function governing
-#'   detection (triggering) of the closest individual.
-#' @param sigma_true Numeric or \code{NULL}. Scale of the half-normal
-#'   detection function for other individuals within the field of view; only
-#'   used when \code{perfect_fov = FALSE}.
-#' @param w Numeric. Truncation distance (sector radius).
-#' @param fov Numeric. Camera field of view in degrees (full angular width).
-#' @param n_cam Integer. Number of camera locations.
-#' @param width,height Numeric. Dimensions of the rectangular study region.
-#' @param distribution Character. \code{"uniform"} or \code{"clustered"};
-#'   passed to \code{\link{generate_animals}}.
-#' @param perfect_fov Logical. If \code{TRUE}, all animals in the sector are
-#'   recorded once the camera triggers; if \code{FALSE}, further animals are
-#'   detected with half-normal probability using \code{sigma_true}.
-#' @param cluster_radius,mean_cluster_size Passed to
-#'   \code{\link{generate_animals}} for clustered distributions.
-#' @param min_total Integer. Minimum total detections required; replicates
-#'   with fewer return \code{NULL}.
-#' @param binned Logical. If \code{TRUE}, distances are binned before fitting.
-#' @param breaks Numeric vector of bin cutpoints, used when
-#'   \code{binned = TRUE}.
-#'
-#' @return A one-row \code{data.frame} with the number of detections
-#'   (\code{n_total}), mean count per triggered camera (\code{mean_n}),
-#'   density estimate (\code{D}) with standard error, CV components
-#'   (\code{cv_encounter}, \code{cv_detection}, \code{cv}), confidence limits
-#'   (\code{lcl}, \code{ucl}) and whether the interval covers \code{D_true}
-#'   (\code{cover}); \code{NA}s if model fitting fails. Returns \code{NULL} if
-#'   fewer than \code{min_total} detections are obtained.
+
 sim_ctds <- function(D_true, sigma_closest, sigma_true=NULL,
                      w, fov, n_cam, width, height,
                      distribution = "uniform", perfect_fov = TRUE,
                      cluster_radius = 30, mean_cluster_size = 5,
                      min_total = 10, binned = FALSE, breaks = NULL) {
-  ## standard CTDS for sensor based cameras assuming camera is triggered
-  ## by the closest individual
+  #' Simulate one camera trap distance sampling (CTDS) replicate
+  #'
+  #' Simulates sensor-triggered CTDS: an animal population is generated,
+  #' \code{n_cam} cameras are placed at random locations (all facing south),
+  #' and a camera is triggered by the closest individual with probability given
+  #' by a half-normal detection function. Density is estimated by fitting a
+  #' point-transect detection function with \code{\link[Distance]{ds}} (chosen
+  #' by AIC) and estimating abundance with \code{\link[Distance]{dht2}}.
+  #'
+  #' @param D_true Numeric. True animal density (animals per unit area).
+  #' @param sigma_closest Numeric. Scale of the half-normal function governing
+  #'   detection (triggering) of the closest individual.
+  #' @param sigma_true Numeric or \code{NULL}. Scale of the half-normal
+  #'   detection function for other individuals within the field of view; only
+  #'   used when \code{perfect_fov = FALSE}.
+  #' @param w Numeric. Truncation distance (sector radius).
+  #' @param fov Numeric. Camera field of view in degrees (full angular width).
+  #' @param n_cam Integer. Number of camera locations.
+  #' @param width,height Numeric. Dimensions of the rectangular study region.
+  #' @param distribution Character. \code{"uniform"} or \code{"clustered"};
+  #'   passed to \code{\link{generate_animals}}.
+  #' @param perfect_fov Logical. If \code{TRUE}, all animals in the sector are
+  #'   recorded once the camera triggers; if \code{FALSE}, further animals are
+  #'   detected with half-normal probability using \code{sigma_true}.
+  #' @param cluster_radius,mean_cluster_size Passed to
+  #'   \code{\link{generate_animals}} for clustered distributions.
+  #' @param min_total Integer. Minimum total detections required; replicates
+  #'   with fewer return \code{NULL}.
+  #' @param binned Logical. If \code{TRUE}, distances are binned before fitting.
+  #' @param breaks Numeric vector of bin cutpoints, used when
+  #'   \code{binned = TRUE}.
+  #'
+  #' @return A one-row \code{data.frame} with the number of detections
+  #'   (\code{n_total}), mean count per triggered camera (\code{mean_n}),
+  #'   density estimate (\code{D}) with standard error, CV components
+  #'   (\code{cv_encounter}, \code{cv_detection}, \code{cv}), confidence limits
+  #'   (\code{lcl}, \code{ucl}) and whether the interval covers \code{D_true}
+  #'   (\code{cover}); \code{NA}s if model fitting fails. Returns \code{NULL} if
+  #'   fewer than \code{min_total} detections are obtained.
+  #'
 
     require(Distance)
   animals<- generate_animals(width = width,
@@ -293,25 +293,25 @@ sim_ctds <- function(D_true, sigma_closest, sigma_true=NULL,
 
 ##----- Closest distance -----------------------
 
-#' Simulate one closest-distance CTDS replicate
-#'
-#' Simulates sensor-triggered camera surveys where only the distance to the
-#' closest (triggering) individual at each camera is used to fit the detection
-#' function, with availability adjusted for the number of individuals (group
-#' size) in the field of view. Density is estimated with
-#' \code{\link{estimate_density_closest}}.
-#'
-#' @inheritParams sim_ctds
-#'
-#' @return A one-row \code{data.frame} with the same columns as
-#'   \code{\link{sim_ctds}}; returns \code{NULL} if fewer than
-#'   \code{min_total} cameras record a triggering individual.
 sim_closest <- function(D_true, sigma_closest, sigma_true,
                         w, fov, n_cam, width, height,
                         distribution = "uniform", perfect_fov = TRUE,
                         cluster_radius = 30, mean_cluster_size = 5,
                         min_total = 10, binned = FALSE, breaks = NULL) {
-
+  #' Simulate one closest-distance CTDS replicate
+  #'
+  #' Simulates sensor-triggered camera surveys where only the distance to the
+  #' closest (triggering) individual at each camera is used to fit the detection
+  #' function, with availability adjusted for the number of individuals (group
+  #' size) in the field of view. Density is estimated with
+  #' \code{\link{estimate_density_closest}}.
+  #'
+  #' see \code{\link{sim_ctds}} for a description of function arguments
+  #'
+  #' @return A one-row \code{data.frame} with the same columns as
+  #'   \code{\link{sim_ctds}}; returns \code{NULL} if fewer than
+  #'   \code{min_total} cameras record a triggering individual.
+  #'
   animals<- generate_animals(width = width,
                              height = height,
                              density = D_true,
@@ -381,24 +381,25 @@ sim_closest <- function(D_true, sigma_closest, sigma_true,
 
 ## ----- Time lapse CTDS -----------------
 
-#' Simulate one time-lapse CTDS replicate
-#'
-#' Simulates time-lapse (non-sensor) camera surveys: at a snapshot moment all
-#' animals within each camera sector are recorded (subject to detection error
-#' when \code{perfect_fov = FALSE}), and distances to all detected animals
-#' are used to fit a half-normal detection function. Density is estimated with
-#' \code{\link{estimate_density_ctds}}.
-#'
-#' @inheritParams sim_ctds
-#'
-#' @return A one-row \code{data.frame} with the same columns as
-#'   \code{\link{sim_ctds}}; returns \code{NULL} if fewer than
-#'   \code{min_total} distances are recorded.
+
 sim_lapse <- function(D_true, sigma_true, w, fov, n_cam, width, height,
                      distribution = "uniform", perfect_fov = TRUE,
                      cluster_radius = 30, mean_cluster_size = 5, min_total = 10,
                      binned = FALSE, breaks = NULL) {
-
+  #' Simulate one time-lapse CTDS replicate
+  #'
+  #' Simulates time-lapse (non-sensor) camera surveys: at a snapshot moment all
+  #' animals within each camera sector are recorded (subject to detection error
+  #' when \code{perfect_fov = FALSE}), and distances to all detected animals
+  #' are used to fit a half-normal detection function. Density is estimated with
+  #' \code{\link{estimate_density_ctds}}.
+  #'
+  #' @inheritParams sim_ctds
+  #'
+  #' @return A one-row \code{data.frame} with the same columns as
+  #'   \code{\link{sim_ctds}}; returns \code{NULL} if fewer than
+  #'   \code{min_total} distances are recorded.
+  #'
   animals<- generate_animals(width = width,
                              height = height,
                              density = D_true,
@@ -464,29 +465,30 @@ sim_lapse <- function(D_true, sigma_true, w, fov, n_cam, width, height,
 
 ## ----- Sample sector ----------------------------------------
 
-#' Subset points falling within a camera sector
-#'
-#' Detects which points (e.g. animals) fall within a circular sector defined
-#' by a camera location, viewing direction, radius and angular width.
-#'
-#' @param points A \code{data.frame} with columns \code{x} and \code{y}, e.g.
-#'   from \code{\link{generate_animals}}.
-#' @param origin Numeric vector of length 2. Camera location \code{c(x, y)}.
-#' @param bearing Numeric. FOV direction in degrees (0 = east, increasing
-#'   counter-clockwise in mathematical convention as used by \code{atan2}).
-#' @param radius Numeric. Sector radius (truncation distance \code{w}).
-#' @param angle Numeric. Full angular width of the FOV in degrees, split
-#'   \eqn{\pm} about \code{bearing}.
-#'
-#' @return The subset of \code{points} inside the sector, with added columns
-#'   \code{r} (radial distance from the camera) and \code{theta} (angle
-#'   relative to the bearing, radians).
+
 sample_sector <- function(points,
                           origin = c(0, 0),
                           bearing = 0,
                           radius,
                           angle) {
-
+  #' Subset points falling within a camera sector
+  #'
+  #' Detects which points (e.g. animals) fall within a circular sector defined
+  #' by a camera location, viewing direction, radius and angular width.
+  #'
+  #' @param points A \code{data.frame} with columns \code{x} and \code{y}, e.g.
+  #'   from \code{\link{generate_animals}}.
+  #' @param origin Numeric vector of length 2. Camera location \code{c(x, y)}.
+  #' @param bearing Numeric. FOV direction in degrees (0 = east, increasing
+  #'   counter-clockwise in mathematical convention as used by \code{atan2}).
+  #' @param radius Numeric. Sector radius (truncation distance \code{w}).
+  #' @param angle Numeric. Full angular width of the FOV in degrees, split
+  #'   \eqn{\pm} about \code{bearing}.
+  #'
+  #' @return The subset of \code{points} inside the sector, with added columns
+  #'   \code{r} (radial distance from the camera) and \code{theta} (angle
+  #'   relative to the bearing, radians).
+  #'
   dx <- points$x - origin[1]
   dy <- points$y - origin[2]
   r <- sqrt(dx^2 + dy^2)
@@ -506,23 +508,24 @@ sample_sector <- function(points,
 }
 
 ##---- Binning -------------------------------------
-#' Tabulate binned distances by group size
-#'
-#' Bins the triggering (closest) distances separately for each observed group
-#' size, for use with \code{\link{nll.cond.binned.hn}}.
-#'
-#' @param counts Integer vector of group sizes (number of animals in the FOV)
-#'   per camera; zeros are ignored.
-#' @param dists Numeric vector of closest distances per camera, parallel to
-#'   \code{counts} (may contain \code{NA} for non-triggered cameras).
-#' @param breaks Numeric vector of bin cutpoints passed to
-#'   \code{\link{make_bins}}.
-#'
-#' @return A list with elements \code{bin_list} (a list of binned count
-#'   vectors, one per distinct group size) and \code{grps} (the corresponding
-#'   group sizes).
-table_counts<- function(counts, dists, breaks) {
 
+table_counts<- function(counts, dists, breaks) {
+  #' Tabulate binned distances by group size
+  #'
+  #' Bins the triggering (closest) distances separately for each observed group
+  #' size, for use with \code{\link{nll.cond.binned.hn}}.
+  #'
+  #' @param counts Integer vector of group sizes (number of detected animals in the FOV)
+  #'   per camera; zeros are ignored.
+  #' @param dists Numeric vector of closest distances per camera, parallel to
+  #'   \code{counts} (may contain \code{NA} for non-triggered cameras).
+  #' @param breaks Numeric vector of bin cutpoints passed to
+  #'   \code{\link{make_bins}}.
+  #'
+  #' @return A list with elements \code{bin_list} (a list of binned count
+  #'   vectors, one per distinct group size) and \code{grps} (the corresponding
+  #'   group sizes).
+  #'
   ii<- which(counts > 0)
   c_nonzero<- counts[ii]
   dd<- dists[ii]
@@ -540,22 +543,23 @@ table_counts<- function(counts, dists, breaks) {
   list(bin_list=blist, grps=grps)
 }
 
-#' Bin distances into counts
-#'
-#' Cuts distances into bins defined by \code{breaks} and returns a count per
-#' bin, including zero counts for empty bins.
-#'
-#' @param dist Numeric vector of distances.
-#' @param breaks Numeric vector of bin cutpoints passed to \code{\link{cut}}.
-#' @param right Logical. Should intervals be closed on the right? Default
-#'   \code{FALSE} (closed on the left).
-#' @param include_lowest Logical. Should the lowest break be included in the
-#'   first bin? Default \code{TRUE}.
-#'
-#' @return A one-dimensional \code{xtabs} object (named numeric vector) of
-#'   counts per bin, with bins in the order given by \code{breaks}.
+
 make_bins <- function(dist, breaks, right = FALSE, include_lowest = TRUE) {
-  ## bin data keeping site hierarchy
+  #' Bin distances into counts
+  #'
+  #' Cuts distances into bins defined by \code{breaks} and returns a count per
+  #' bin, including zero counts for empty bins.
+  #'
+  #' @param dist Numeric vector of distances.
+  #' @param breaks Numeric vector of bin cutpoints passed to \code{\link{cut}}.
+  #' @param right Logical. Should intervals be closed on the right? Default
+  #'   \code{FALSE} (closed on the left).
+  #' @param include_lowest Logical. Should the lowest break be included in the
+  #'   first bin? Default \code{TRUE}.
+  #'
+  #' @return A one-dimensional \code{xtabs} object (named numeric vector) of
+  #'   counts per bin, with bins in the order given by \code{breaks}.
+  #'
   bin <- cut(dist, breaks = breaks, right = right, include.lowest = include_lowest)
   bin_levels <- levels(bin)
   # observed counts
@@ -572,45 +576,21 @@ make_bins <- function(dist, breaks, right = FALSE, include_lowest = TRUE) {
 }
 
 
-#' Bin exact distances into equal-width intervals
-#'
-#' Converts exact distances into binned distances with columns
-#' \code{distbegin} and \code{distend} (the format expected by
-#' \code{\link[Distance]{ds}} for binned data), truncating at
-#' \code{truncation}.
-#'
-#' @param data A \code{data.frame} with a \code{distance} column.
-#' @param bin_width Numeric. Width of each distance bin.
-#' @param truncation Numeric. Maximum distance retained.
-#'
-#' @return \code{data} restricted to distances up to \code{truncation}, with
-#'   added columns \code{distbegin} and \code{distend} giving the bin
-#'   endpoints.
-bin_distances_bw <- function(data, bin_width, truncation) {
-  breaks <- seq(0, truncation, by = bin_width)
-
-  data |>
-    dplyr::filter(distance <= truncation) |>
-    dplyr::mutate(
-      distbegin = breaks[findInterval(distance, breaks)],
-      distend   = distbegin + bin_width
-    )
-}
-
-
-#' Bin exact distances into intervals given by cutpoints
-#'
-#' Like \code{\link{bin_distances_bw}} but with arbitrary bin endpoints,
-#' truncating at the largest cutpoint.
-#'
-#' @param data A \code{data.frame} with a \code{distance} column.
-#' @param cutpoints Numeric vector of bin endpoints (must include 0 and the
-#'   truncation distance).
-#'
-#' @return \code{data} restricted to distances up to \code{max(cutpoints)},
-#'   with added columns \code{distbegin} and \code{distend} giving the bin
-#'   endpoints.
 bin_distances_cut <- function(data, cutpoints) {
+  #' Bin exact distances into intervals given by cutpoints
+  #'
+  #' Converts exact distances into binned distances with columns
+  #' \code{distbegin} and \code{distend} (the format expected by
+  #' \code{\link[Distance]{ds}} for binned data).
+  #'
+  #' @param data A \code{data.frame} with a \code{distance} column.
+  #' @param cutpoints Numeric vector of bin endpoints (must include 0 and the
+  #'   truncation distance).
+  #'
+  #' @return \code{data} restricted to distances up to \code{max(cutpoints)},
+  #'   with added columns \code{distbegin} and \code{distend} giving the bin
+  #'   endpoints.
+  #'
   truncation <- max(cutpoints)
 
   data |>
@@ -625,62 +605,70 @@ bin_distances_cut <- function(data, cutpoints) {
 ## Availability and LL functions
 ##---------------------------------------
 
-#' Half-normal detection function
-#'
-#' @param x Numeric vector of radial distances.
-#' @param sigma Numeric. Scale parameter of the half-normal function.
-#'
-#' @return Detection probability \eqn{\exp(-x^2 / (2\sigma^2))} at each
-#'   distance.
-hn_func<- function(x, sigma) {exp(-x^2/(2*sigma^2))}
+
+hn_func<- function(x, sigma) {
+  #' Half-normal detection function
+  #'
+  #' @param x Numeric vector of radial distances.
+  #' @param sigma Numeric. Scale parameter of the half-normal function.
+  #'
+  #' @return Detection probability \eqn{\exp(-x^2 / (2\sigma^2))} at each
+  #'   distance.
+    return(exp(-x^2/(2*sigma^2)))
+  }
 
 
-#' Availability density of the closest of n individuals (continuous)
-#'
-#' Density of the distance to the closest of \code{n} uniformly distributed
-#' individuals within a circular sector of radius \code{w} (equation 5 of the
-#' accompanying manuscript). With \code{n = 1} this is the triangular
-#' availability density \eqn{2x/w^2}.
-#'
-#' @param x Numeric vector of radial distances.
-#' @param w Numeric. Sector radius (truncation distance).
-#' @param n Numeric. Group size (number of individuals in the sector).
-#'
-#' @return The availability density evaluated at \code{x}.
+
 availability_cont <- function(x, w, n=1) {
+  #' Availability density of the closest of n individuals (continuous)
+  #'
+  #' Density of the distance to the closest of \code{n} uniformly distributed
+  #' individuals within a circular sector of radius \code{w} (equation 5 of the
+  #' accompanying manuscript). With \code{n = 1} this is the triangular
+  #' availability density \eqn{2x/w^2}.
+  #'
+  #' @param x Numeric vector of radial distances.
+  #' @param w Numeric. Sector radius (truncation distance).
+  #' @param n Numeric. Group size (number of individuals in the sector).
+  #'
+  #' @return The availability density evaluated at \code{x}.
   return((2*x*n)/w^2 * (1 - (x/w)^2)^(n-1))
 }
 
-#' Availability probability of the closest of n individuals (binned)
-#'
-#' Probability that the closest of \code{n} uniformly distributed individuals
-#' within a sector of radius \code{w} falls in the distance bin
-#' \eqn{[bin\_start, bin\_end)} (equation 6 of the accompanying manuscript).
-#'
-#' @param bin_start,bin_end Numeric. Lower and upper bin endpoints.
-#' @param w Numeric. Sector radius (truncation distance).
-#' @param n Numeric. Group size (number of individuals in the sector).
-#'
-#' @return The probability of the closest individual falling in the bin.
+
 availability_bins <- function(bin_start, bin_end, w, n=1) {
+  #' Availability probability of the closest of n individuals (binned)
+  #'
+  #' Probability that the closest of \code{n} uniformly distributed individuals
+  #' within a sector of radius \code{w} falls in the distance bin
+  #' \eqn{[bin\_start, bin\_end)} (equation 6 of the accompanying manuscript).
+  #' Due to bias with increasing bin width, this function is not used in likelihood
+  #' calculations.
+  #'
+  #' @param bin_start,bin_end Numeric. Lower and upper bin endpoints.
+  #' @param w Numeric. Sector radius (truncation distance).
+  #' @param n Numeric. Group size (number of individuals in the sector).
+  #'
+  #' @return The probability of the closest individual falling in the bin.
   return((1 - bin_start^2/w^2)^n - (1 - bin_end^2/w^2)^n)
 }
 ##---------------------------------------
-#' Expected bin probabilities under a half-normal detection function
-#'
-#' Integrates the product of availability and the half-normal detection
-#' function over each distance bin, giving the (unnormalised) probability of
-#' a detection falling in each bin.
-#'
-#' @param breaks Numeric vector of bin cutpoints; the largest value is taken
-#'   as the truncation distance \code{w}.
-#' @param sigma Numeric. Scale of the half-normal detection function.
-#' @param gs Numeric. Group size used in the availability function.
-#'
-#' @return Numeric vector of length \code{length(breaks) - 1} with the
-#'   integrated probability for each bin.
-bin_probs_hn <- function(breaks, sigma, gs) {
 
+bin_probs_hn <- function(breaks, sigma, gs) {
+  #' Expected bin probabilities under a half-normal detection function
+  #'
+  #' Integrates the product of availability and the half-normal detection
+  #' function over each distance bin, giving the (unnormalised) probability of
+  #' a detection falling in each bin.
+  #'
+  #' @param breaks Numeric vector of bin cutpoints; the largest value is taken
+  #'   as the truncation distance \code{w}.
+  #' @param sigma Numeric. Scale of the half-normal detection function.
+  #' @param gs Numeric. Group size used in the availability function.
+  #'
+  #' @return Numeric vector of length \code{length(breaks) - 1} with the
+  #'   integrated probability for each bin.
+  #'
   integrand <- function(r, sigma, w, gs) {
     # product of availability, given group size (gs) and detection
     availability_cont(r, w, gs) * hn_func(r, sigma)
@@ -698,23 +686,24 @@ bin_probs_hn <- function(breaks, sigma, gs) {
 
 ##---- conditional likelihood for continuous data ----
 
-#' Conditional negative log-likelihood for exact distances (half-normal)
-#'
-#' Negative log-likelihood of observed radial distances conditional on
-#' detection, under a half-normal detection function. Group-size-specific
-#' availability is allowed via \code{gs}; the normalising constant
-#' (mean detection probability) is computed once per distinct group size.
-#'
-#' @param parm Numeric. Log of the half-normal scale parameter \code{sigma}.
-#' @param x Numeric vector of observed radial distances.
-#' @param w Numeric. Truncation distance (sector radius).
-#' @param gs Numeric vector of group sizes, parallel to \code{x}; use a
-#'   scalar or constant vector for no group-size adjustment.
-#'
-#' @return The conditional negative log-likelihood; returns \code{1e10} if
-#'   the likelihood is not finite (for use with \code{\link{optim}}).
+
 nll.cond.point.hn <- function(parm, x, w, gs){
-  # HN detection function
+  #' Conditional negative log-likelihood for exact distances (half-normal)
+  #'
+  #' Negative log-likelihood of observed radial distances conditional on
+  #' detection, under a half-normal detection function. Group-size-specific
+  #' availability is allowed via \code{gs}; the normalising constant
+  #' (mean detection probability) is computed once per distinct group size.
+  #'
+  #' @param parm Numeric. Log of the half-normal scale parameter \code{sigma}.
+  #' @param x Numeric vector of observed radial distances.
+  #' @param w Numeric. Truncation distance (sector radius).
+  #' @param gs Numeric vector of group sizes, parallel to \code{x}; use a
+  #'   scalar or constant vector for no group-size adjustment.
+  #'
+  #' @return The conditional negative log-likelihood; returns \code{1e10} if
+  #'   the likelihood is not finite (for use with \code{\link{optim}}).
+  #'
   sigma <- exp(parm)
   p <- hn_func(x, sigma)
   A<- availability_cont(x, w, gs)
@@ -734,25 +723,26 @@ nll.cond.point.hn <- function(parm, x, w, gs){
 
 ##---- conditional likelihood for binned data -----
 
-#' Conditional negative log-likelihood for binned distances (half-normal)
-#'
-#' Negative multinomial log-likelihood of binned detection counts conditional
-#' on detection, under a half-normal detection function. Expected bin
-#' probabilities are obtained by integrating availability times detection
-#' over each bin (see \code{\link{bin_probs_hn}}) and normalising.
-#'
-#' @param parm Numeric. Log of the half-normal scale parameter \code{sigma}.
-#' @param counts A list of binned count vectors (e.g. from
-#'   \code{\link{make_bins}}), one per group size; a single vector is
-#'   coerced to a list of length one.
-#' @param gs Numeric vector of group sizes, one per element of \code{counts}.
-#' @param breaks Numeric vector of bin cutpoints; the largest value is taken
-#'   as the truncation distance.
-#'
-#' @return The conditional negative log-likelihood; returns \code{1e10} if
-#'   not finite (for use with \code{\link{optim}}).
+
 nll.cond.binned.hn <- function(parm, counts, gs, breaks){
-  #gs is now a vector
+  #' Conditional negative log-likelihood for binned distances (half-normal)
+  #'
+  #' Negative multinomial log-likelihood of binned detection counts conditional
+  #' on detection, under a half-normal detection function. Expected bin
+  #' probabilities are obtained by integrating availability times detection
+  #' over each bin (see \code{\link{bin_probs_hn}}) and normalising.
+  #'
+  #' @param parm Numeric. Log of the half-normal scale parameter \code{sigma}.
+  #' @param counts A list of binned count vectors (e.g. from
+  #'   \code{\link{make_bins}}), one per group size; a single vector is
+  #'   coerced to a list of length one.
+  #' @param gs Numeric vector of group sizes, one per element of \code{counts}.
+  #' @param breaks Numeric vector of bin cutpoints; the largest value is taken
+  #'   as the truncation distance.
+  #'
+  #' @return The conditional negative log-likelihood; returns \code{1e10} if
+  #'   not finite (for use with \code{\link{optim}}).
+  #'
   sigma <- exp(parm)
   n_group_sizes<- length(gs)
   if(!is.list(counts)) counts<- list(counts)
@@ -770,29 +760,30 @@ nll.cond.binned.hn <- function(parm, counts, gs, breaks){
 
 ##---- Detection function-----------------------
 
-#' Fit a half-normal detection function by conditional MLE
-#'
-#' Fits a half-normal detection function to observed radial distances by
-#' maximising the conditional likelihood (given detection), using
-#' \code{\link{optim}} with the Brent method on the log scale. Works with
-#' either exact distances or binned counts.
-#'
-#' @param dist For exact data, a numeric vector of radial distances; for
-#'   binned data, a list of binned count vectors (see
-#'   \code{\link{nll.cond.binned.hn}}).
-#' @param w Numeric. Truncation distance (sector radius).
-#' @param gs Numeric. Group size(s) used for availability: a vector parallel
-#'   to \code{dist} for exact data, or one value per element of \code{dist}
-#'   for binned data. Default \code{1} (no group-size adjustment).
-#' @param binned Logical. Is \code{dist} binned? Requires \code{breaks}.
-#' @param breaks Numeric vector of bin cutpoints, required when
-#'   \code{binned = TRUE}.
-#'
-#' @return A list with elements \code{sigma} (estimated half-normal scale),
-#'   \code{log_sigma}, \code{se_log_sigma} (standard error on the log scale,
-#'   from the Hessian) and \code{mle} (the full \code{\link{optim}} result).
-fit_detection_hn <- function(dist, w, gs = 1, binned = FALSE, breaks = NULL) {
 
+fit_detection_hn <- function(dist, w, gs = 1, binned = FALSE, breaks = NULL) {
+  #' Fit a half-normal detection function by conditional MLE
+  #'
+  #' Fits a half-normal detection function to observed radial distances by
+  #' maximising the conditional likelihood (given detection), using
+  #' \code{\link{optim}} with the Brent method on the log scale. Works with
+  #' either exact distances or binned counts.
+  #'
+  #' @param dist For exact data, a numeric vector of radial distances; for
+  #'   binned data, a list of binned count vectors (see
+  #'   \code{\link{nll.cond.binned.hn}}).
+  #' @param w Numeric. Truncation distance (sector radius).
+  #' @param gs Numeric. Group size(s) used for availability: a vector parallel
+  #'   to \code{dist} for exact data, or one value per element of \code{dist}
+  #'   for binned data. Default \code{1} (no group-size adjustment).
+  #' @param binned Logical. Is \code{dist} binned? Requires \code{breaks}.
+  #' @param breaks Numeric vector of bin cutpoints, required when
+  #'   \code{binned = TRUE}.
+  #'
+  #' @return A list with elements \code{sigma} (estimated half-normal scale),
+  #'   \code{log_sigma}, \code{se_log_sigma} (standard error on the log scale,
+  #'   from the Hessian) and \code{mle} (the full \code{\link{optim}} result).
+  #'
   if(binned & ! is.null(breaks)) {
     mle <- optim(
       par = log(w / 2),
@@ -818,29 +809,30 @@ fit_detection_hn <- function(dist, w, gs = 1, binned = FALSE, breaks = NULL) {
 
 ##----- Estimate density ctds--------------------------
 
-#' Estimate density from time-lapse camera sectors
-#'
-#' Design-based density estimate from independent camera sectors of equal
-#' area. Encounter-rate variance is estimated empirically across cameras
-#' following Fewster et al. (2009, Biometrics, estimator P2); detection-
-#' function variance is added via the delta method, and log-normal confidence
-#' intervals are constructed.
-#'
-#' @param counts Integer vector of detection counts per camera (length
-#'   \code{K >= 2}, may include zeros).
-#' @param w Numeric. Truncation distance (sector radius).
-#' @param angle Numeric. Camera field of view in degrees (full angular width).
-#' @param fit Output of \code{\link{fit_detection_hn}} fitted to the pooled
-#'   distances.
-#' @param level Numeric. Confidence level for the interval; default 0.95.
-#'
-#' @return A list with the density estimate \code{D}, total detections
-#'   \code{n}, number of cameras \code{K}, effective per-camera area
-#'   \code{eff_area}, estimated \code{sigma}, standard error \code{se},
-#'   overall CV and its components (\code{cv}, \code{cv_encounter},
-#'   \code{cv_detection}), and confidence limits \code{lcl}, \code{ucl}.
-estimate_density_ctds <- function(counts, w, angle, fit, level = 0.95) {
 
+estimate_density_ctds <- function(counts, w, angle, fit, level = 0.95) {
+  #' Estimate density from time-lapse camera sectors
+  #'
+  #' Design-based density estimate from independent camera sectors of equal
+  #' area. Encounter-rate variance is estimated empirically across cameras
+  #' following Fewster et al. (2009, Biometrics, estimator P2); detection-
+  #' function variance is added via the delta method, and log-normal confidence
+  #' intervals are constructed.
+  #'
+  #' @param counts Integer vector of detection counts per camera (length
+  #'   \code{K >= 2}, may include zeros).
+  #' @param w Numeric. Truncation distance (sector radius).
+  #' @param angle Numeric. Camera field of view in degrees (full angular width).
+  #' @param fit Output of \code{\link{fit_detection_hn}} fitted to the pooled
+  #'   distances.
+  #' @param level Numeric. Confidence level for the interval; default 0.95.
+  #'
+  #' @return A list with the density estimate \code{D}, total detections
+  #'   \code{n}, number of cameras \code{K}, effective per-camera area
+  #'   \code{eff_area}, estimated \code{sigma}, standard error \code{se},
+  #'   overall CV and its components (\code{cv}, \code{cv_encounter},
+  #'   \code{cv_detection}), and confidence limits \code{lcl}, \code{ucl}.
+  #'
   K <- length(counts)
   if (K < 2) stop("need at least 2 cameras for an empirical variance")
 
@@ -887,29 +879,30 @@ estimate_density_ctds <- function(counts, w, angle, fit, level = 0.95) {
 }
 
 ##---- Estimate Density Closest-----------------------------
-#' Estimate density from closest-distance camera sectors
-#'
-#' Design-based density estimate where each camera contributes the group size
-#' (number of individuals in the FOV) of the triggered cluster, and the
-#' effective detection probability of the closest individual depends on group
-#' size through the availability function. Encounter-rate variance is
-#' estimated empirically across cameras (Fewster et al. 2009, Biometrics,
-#' estimator R2); detection-function variance is added via the delta method
-#' evaluated at the median group size, and log-normal confidence intervals
-#' are constructed.
-#'
-#' @param counts Integer vector of group sizes per camera (length
-#'   \code{K >= 2}, may include zeros).
-#' @param w Numeric. Truncation distance (sector radius).
-#' @param angle Numeric. Camera field of view in degrees (full angular width).
-#' @param fit Output of \code{\link{fit_detection_hn}} fitted to the pooled
-#'   closest distances (with group-size adjustment).
-#' @param level Numeric. Confidence level for the interval; default 0.95.
-#'
-#' @return A list with the same elements as \code{\link{estimate_density_ctds}};
-#'   \code{eff_area} is the mean per-camera effective area.
-estimate_density_closest <- function(counts, w, angle, fit, level = 0.95) {
 
+estimate_density_closest <- function(counts, w, angle, fit, level = 0.95) {
+  #' Estimate density from closest-distance camera sectors
+  #'
+  #' Design-based density estimate where each camera contributes the group size
+  #' (number of individuals in the FOV) of the triggered cluster, and the
+  #' effective detection probability of the closest individual depends on group
+  #' size through the availability function. Encounter-rate variance is
+  #' estimated empirically across cameras (Fewster et al. 2009, Biometrics,
+  #' estimator R2); detection-function variance is added via the delta method
+  #' evaluated at the median group size, and log-normal confidence intervals
+  #' are constructed.
+  #'
+  #' @param counts Integer vector of group sizes per camera (length
+  #'   \code{K >= 2}, may include zeros).
+  #' @param w Numeric. Truncation distance (sector radius).
+  #' @param angle Numeric. Camera field of view in degrees (full angular width).
+  #' @param fit Output of \code{\link{fit_detection_hn}} fitted to the pooled
+  #'   closest distances (with group-size adjustment).
+  #' @param level Numeric. Confidence level for the interval; default 0.95.
+  #'
+  #' @return A list with the same elements as \code{\link{estimate_density_ctds}};
+  #'   \code{eff_area} is the mean per-camera effective area.
+  #'
   K <- length(counts)
   if (K < 2) stop("need at least 2 cameras for an empirical variance")
 
@@ -968,20 +961,7 @@ estimate_density_closest <- function(counts, w, angle, fit, level = 0.95) {
 
 ##---- standard CTDS with closest distance trigger ------------------
 
-#' Run a sensor-triggered CTDS simulation study
-#'
-#' Repeats \code{\link{sim_ctds}} \code{n_rep} times. Each replicate places
-#' \code{n_cam} random cameras; the encounter-rate variance is estimated
-#' across those cameras, so under clustering the empirical variance captures
-#' over-dispersion and CI coverage should recover toward nominal.
-#'
-#' @param n_rep Integer. Number of simulation replicates.
-#' @inheritParams sim_ctds
-#' @param progress Logical. Show a text progress bar? Default \code{TRUE}.
-#'
-#' @return A \code{data.frame} with one row per successful replicate (columns
-#'   as in \code{\link{sim_ctds}}), with an attribute \code{"truth"} holding
-#'   the true parameter values and model label (\code{"CTDS"}).
+
 run_density_ctds<- function(n_rep = 5,
                             D_true = 0.01,
                             sigma_closest = 4,
@@ -998,7 +978,43 @@ run_density_ctds<- function(n_rep = 5,
                             binned = FALSE,
                             breaks = NULL,
                             progress = TRUE) {
-
+  #' Run a sensor-triggered CTDS simulation study
+  #'
+  #' Repeats \code{\link{sim_ctds}} \code{n_rep} times. Each replicate places
+  #' \code{n_cam} random camera sectors within the area defined by \code{width, height};
+  #' Cameras are triggered by the closest individual conditional on
+  #' \code{sigma_closest} with further individuals subject to detection error
+  #' conditional on \code{sigma_true}.  Distance data is analysed using the
+  #' \code{ds} function in the \code{Distance} package with model selection used
+  #' to select the best-fit detection function from a list of candidates.
+  #'
+  #' @param n_rep Integer. Number of simulation replicates.
+  #' @param D_true Numeric. True animal density (animals per unit area).
+  #' @param sigma_closest Numeric. Scale of the half-normal function governing
+  #'   detection (triggering) of the closest individual.
+  #' @param sigma_true Numeric or \code{NULL}. Scale of the half-normal
+  #'   detection function for other individuals within the field of view; only
+  #'   used when \code{perfect_fov = FALSE}.
+  #' @param w Numeric. Truncation distance (sector radius).
+  #' @param fov Numeric. Camera field of view in degrees (full angular width).
+  #' @param n_cam Integer. Number of camera locations.
+  #' @param width,height Numeric. Dimensions of the rectangular study region.
+  #' @param distribution Character. \code{"uniform"} or \code{"clustered"};
+  #'   passed to \code{\link{generate_animals}}.
+  #' @param perfect_fov Logical. If \code{TRUE}, all animals in the sector are
+  #'   recorded once the camera triggers; if \code{FALSE}, further animals are
+  #'   detected with half-normal probability using \code{sigma_true}.
+  #' @param cluster_radius,mean_cluster_size Passed to
+  #'   \code{\link{generate_animals}} for clustered distributions.
+  #' @param binned Logical. If \code{TRUE}, distances are binned before fitting.
+  #' @param breaks Numeric vector of bin cutpoints, used when
+  #'   \code{binned = TRUE}.
+  #' @param progress Logical. Show a text progress bar? Default \code{TRUE}.
+  #'
+  #' @return A \code{data.frame} with one row per successful replicate (columns
+  #'   as in \code{\link{sim_ctds}}), with an attribute \code{"truth"} holding
+  #'   the true parameter values and model label (\code{"CTDS"}).
+  #'
   distribution <- match.arg(distribution)
   res <- vector("list", n_rep)
   pb <- if (progress) utils::txtProgressBar(max = n_rep, style = 3) else NULL
@@ -1025,16 +1041,7 @@ run_density_ctds<- function(n_rep = 5,
 
 ##---- closest distance only with group size adjustment----------------
 
-#' Run a closest-distance CTDS simulation study
-#'
-#' Repeats \code{\link{sim_closest}} \code{n_rep} times. Variance is estimated
-#' empirically across cameras as in \code{\link{run_density_ctds}}.
-#'
-#' @inheritParams run_density_ctds
-#'
-#' @return A \code{data.frame} with one row per successful replicate (columns
-#'   as in \code{\link{sim_closest}}), with an attribute \code{"truth"}
-#'   holding the true parameter values and model label (\code{"Closest"}).
+
 run_density_closest <- function(n_rep = 5,
                             D_true = 0.01,
                             sigma_closest = 4,
@@ -1051,7 +1058,24 @@ run_density_closest <- function(n_rep = 5,
                             binned = FALSE,
                             breaks = NULL,
                             progress = TRUE) {
-
+  #' Run a closest-distance CTDS simulation study
+  #'
+  #' Repeats \code{\link{sim_closest}} \code{n_rep} times. Each replicate
+  #' places \code{n_cam} random camera sectors within the area defined
+  #' by \code{width, height}; Cameras are triggered by the closest individual
+  #' conditional on \code{sigma_closest} with further individuals subject to
+  #' detection error conditional on \code{sigma_true}. Only the closest detected
+  #' distance is used to estimate the detection function with the total number
+  #' of detected individuals used to estimate the group size parameter \code{n},
+  #' (equation 5 of the accompanying manuscript). Variance is estimated
+  #' using a design-based approach as in \code{\link{run_density_ctds}}.
+  #'
+  #' see \code{\link{run_density_ctds}} for a description of function arguments
+  #'
+  #' @return A \code{data.frame} with one row per successful replicate (columns
+  #'   as in \code{\link{sim_closest}}), with an attribute \code{"truth"}
+  #'   holding the true parameter values and model label (\code{"Closest"}).
+  #'
   distribution <- match.arg(distribution)
   res <- vector("list", n_rep)
   pb <- if (progress) utils::txtProgressBar(max = n_rep, style = 3) else NULL
@@ -1077,16 +1101,7 @@ run_density_closest <- function(n_rep = 5,
 
 ##---- standard CTDS with time lapse (no sensor) -----------------------
 
-#' Run a time-lapse CTDS simulation study
-#'
-#' Repeats \code{\link{sim_lapse}} \code{n_rep} times. Variance is estimated
-#' empirically across cameras as in \code{\link{run_density_ctds}}.
-#'
-#' @inheritParams run_density_ctds
-#'
-#' @return A \code{data.frame} with one row per successful replicate (columns
-#'   as in \code{\link{sim_lapse}}), with an attribute \code{"truth"} holding
-#'   the true parameter values and model label (\code{"lapse"}).
+
 run_density_lapse <- function(n_rep = 5,
                                 D_true = 0.01,
                                 sigma_true = 12,
@@ -1102,7 +1117,22 @@ run_density_lapse <- function(n_rep = 5,
                                 binned = FALSE,
                                 breaks = NULL,
                                 progress = TRUE) {
-
+  #' Run a time-lapse CTDS simulation study
+  #'
+  #' Repeats \code{\link{sim_lapse}} \code{n_rep} times. Each replicate
+  #' places \code{n_cam} random camera sectors within the area defined
+  #' by \code{width, height}; Cameras are not triggered by a motion sensor but
+  #' are programmed to record snapshot moments at set intervals (time lapse mode).
+  #' individuals are subject to detection error conditional on \code{sigma_true}.
+  #' Variance is estimated using a design-based approach as in
+  #' \code{\link{run_density_ctds}}.
+  #'
+  #' see \code{\link{run_density_ctds}} for a description of function arguments
+  #'
+  #' @return A \code{data.frame} with one row per successful replicate (columns
+  #'   as in \code{\link{sim_lapse}}), with an attribute \code{"truth"} holding
+  #'   the true parameter values and model label (\code{"lapse"}).
+  #'
   distribution <- match.arg(distribution)
   res <- vector("list", n_rep)
   pb <- if (progress) utils::txtProgressBar(max = n_rep, style = 3) else NULL
@@ -1129,21 +1159,23 @@ run_density_lapse <- function(n_rep = 5,
 
 ##---- Summaries and plots -------------------------------------
 
-#' Summarise a density simulation study
-#'
-#' Computes performance summaries (bias, CV components and confidence-interval
-#' coverage) from the output of \code{\link{run_density_ctds}},
-#' \code{\link{run_density_closest}} or \code{\link{run_density_lapse}}.
-#'
-#' @param res A \code{data.frame} from one of the \code{run_density_*}
-#'   functions, carrying a \code{"truth"} attribute.
-#'
-#' @return A one-row \code{tibble} with the model label, distribution, number
-#'   of cameras, number of successful replicates, mean detections
-#'   (\code{n_total}, \code{mean_n}), true and median estimated density,
-#'   percent relative \code{bias}, mean encounter/detection/overall CVs and
-#'   95\% interval \code{coverage_95}.
+
 summarise_density_sim <- function(res) {
+  #' Summarise a density simulation study
+  #'
+  #' Computes performance summaries (bias, CV components and confidence-interval
+  #' coverage) from the output of \code{\link{run_density_ctds}},
+  #' \code{\link{run_density_closest}} or \code{\link{run_density_lapse}}.
+  #'
+  #' @param res A \code{data.frame} from one of the \code{run_density_*}
+  #'   functions, carrying a \code{"truth"} attribute.
+  #'
+  #' @return A one-row \code{tibble} with the model label, distribution, number
+  #'   of cameras, number of successful replicates, mean detections
+  #'   (\code{n_total}, \code{mean_n}), true and median estimated density,
+  #'   percent relative \code{bias}, mean encounter/detection/overall CVs and
+  #'   95\% interval \code{coverage_95}.
+  #'
   truth <- attr(res, "truth")
   tibble(
     Model          = truth$model,

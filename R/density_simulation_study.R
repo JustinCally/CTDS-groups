@@ -9,12 +9,13 @@
 
 library(tidyverse)
 library(Distance)
-
+library(docstring)
 
 source("R/group_size_funcs.R")
 source("R/CTDS_density_functions.R")
 
-
+# For function help use docstring e.g.
+docstring(run_density_ctds)
 ##---------------------------------------
 ## Uniform density field
 ##---------------------------------------
